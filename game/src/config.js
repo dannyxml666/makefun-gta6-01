@@ -1,39 +1,33 @@
-export const WORLD_SIZE = 1600;
-export const BLOCK_SIZE = 120;
-export const STEP = 1 / 60;
+// Vice Metropolis - Configuration and Tuning Constants
+export const CONFIG = {
+  // Simulation
+  TIMESTEP: 1 / 60,
+  WORLD_SIZE: 400,
+  BLOCK_SIZE: 40,
+  ROAD_WIDTH: 12,
+  PAVEMENT_WIDTH: 3,
 
-export const CAR = {
-  width: 3.2,
-  length: 6.5,
-  height: 2.2,
-  maxSpeed: 90,
-  accel: 35,
-  brake: 50,
-  turnSpeed: 2.4,
-  friction: 0.985,
+  // Player stats
+  PLAYER_SPEED_WALK: 4.5,
+  PLAYER_SPEED_RUN: 8.0,
+  PLAYER_ACCEL: 20.0,
+  PLAYER_TURN_SPEED: 3.0,
+
+  // Car stats
+  CAR_MAX_SPEED: 35.0,
+  CAR_ACCEL: 12.0,
+  CAR_BRAKE: 25.0,
+  CAR_TURN_SPEED: 2.2,
+  CAR_DRAG: 0.98,
+
+  // Combat & Health
+  MAX_HEALTH: 100,
+  MAX_ARMOUR: 100,
+  PUNCH_RANGE: 3.0,
+  PUNCH_DAMAGE: 25,
+
+  // Missions
+  MISSION_GETAWAY_TIME: 60,
+  MISSION_DELIVERY_TIME: 90,
+  MISSION_ESCAPE_TIME: 75,
 };
-
-export const FOOT = {
-  speed: 8,
-  turnSpeed: 4.0,
-};
-
-export const PALETTE = {
-  skySunset: '#ff4b82',
-  skyTop: '#100b2e',
-  ground: '#1e2229',
-  road: '#282f3d',
-  sidewalk: '#4a5568',
-  buildingBase: '#2d3748',
-  neonPink: '#ff007f',
-  neonCyan: '#00f0ff',
-  neonYellow: '#ffe600',
-  playerCar: '#e53935',
-  policeCar: '#1e88e5',
-  npcCar: '#43a047',
-  pedestrian: '#ab47bc',
-  text: '#ffffff',
-  muted: '#b0bec5',
-};
-
-export const SAVE_KEY = 'gta6-01.save';

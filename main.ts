@@ -1,8 +1,5 @@
-// A working gta6-01 entry (Node 22, standard library only): Vice Metropolis is an open-world 3D crime simulation game built with Three.js and plain ES modules. Players can drive cars, steal vehicles, complete missions from fixer characters, explore the city on foot or by car, manage wanted levels, evade police cruisers, and collect cash.
-//
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Vice Metropolis - Node entrypoint (Node 22, standard library only)
+// Serves the game and runs the dossier check.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +12,9 @@ const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+if (existsSync(join(here, 'screenshots'))) {
+  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+}
 
 writeFileSync(
   join(out, 'dossier.json'),
@@ -27,3 +26,5 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+console.log('Vice Metropolis dossier built successfully at:', join(out, 'dossier.json'));

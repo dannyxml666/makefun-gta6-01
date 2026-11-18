@@ -1,128 +1,160 @@
-import { STEP } from './config.js';
-import { createRandom } from './random.js';
-import { createWorld, EVENT_OVER, MISSIONS } from './world.js';
-import { createInput } from './input.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-import { stageShot } from './shots.js';
+// Vice Metropolis - Main Game Loop and State Management
 
-const params = new URLSearchParams(window.location.search);
-const shot = params.get('shot');
-const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 100000);
+import { World } from './world.js';
+import { Renderer } from './render.js';
+import { InputManager } from './input.js';
+import { initShshots } from './shots.js';
 
-const canvas = document.getElementById('game');
-const status = document.getElementById('status');
-const titleScreen = document.getElementById('title-screen');
-const overScreen = document.getElementById('over-screen');
-const cashDisplay = document.getElementById('cash-display');
-const wantedDisplay = document.getElementById('wanted-display');
-const healthDisplay = document.getElementById('health-display');
-const missionTitle = document.getElementById('mission-title');
-const missionDesc = document.getElementById('mission-desc');
-const missionTimer = document.getElementById('mission-timer');
-const startBtn = document.getElementById('start-btn');
-const continueBtn = document.getElementById('continue-btn');
-const restartBtn = document.getElementById('restart-btn');
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('gl-canvas');
+    this.minimapCanvas = document.getElementById('minimap-canvas');
+    this.renderer = new Renderer(this.canvas, this.minimapCanvas);
+    this.input = new InputManager();
+    this.world = new World();
 
-const world = createWorld(createRandom(seed));
-const renderer = createRenderer(canvas);
+    this.state = 'TITLE'; // TITLE, PLAYING, PAUSED, BUSTED, WASTED
+    this.cash = 500;
+    this.wantedLevel = 0;
+    this.health = 100;
+    this.armour = 100;
+    this.mission = { active: false, title: 'None', time: 0, desc: '' };
 
-// Check save for Continue button
-if (world.loadGame()) {
-  continueBtn.classList.remove('hidden');
-}
+    this.player = {
+      x: 0,
+      z: 0,
+      y: 0,
+      angle: 0,
+      speed: 0,
+      inCar: false,
+      car: null,
+    };
 
-function runShot(name) {
-  const scene = stageShot(name, world);
-  titleScreen.classList.add('hidden');
-  if (scene.screen === SCREEN_OVER) {
-    overScreen.classList.remove('hidden');
-  } else {
-    overScreen.classList.add('hidden');
-  }
-  function paint() {
-    renderer.draw(world.state, scene.screen, 0);
-  }
-  paint();
-  paint();
-  window.__shotReady = true;
-}
+    this.camera = { x: 0, y: 15, z: -25, cx: 0, cy: 0, cz: 0 };
 
-if (shot) {
-  runShot(shot);
-} else {
-  runGame();
-}
+    this.setupUI();
+    initShshots(this);
 
-function runGame() {
-  const input = createInput(canvas);
-  let screen = SCREEN_TITLE;
-  let accumulator = 0;
-  let last = performance.now();
-
-  function announce(message) {
-    status.textContent = message;
+    this.lastTime = performance.now();
+    requestAnimationFrame((t) => this.loop(t));
   }
 
-  function startGame(fromSave = false) {
-    world.reset(fromSave);
-    accumulator = 0;
-    screen = SCREEN_PLAY;
-    titleScreen.classList.add('hidden');
-    overScreen.classList.add('hidden');
-    announce('Game started. Vice Metropolis is open.');
+  setupUI() {
+    document.getElementById('new-game-btn').addEventListener('click', () => {
+      document.getElementById('title-screen').style.display = 'none';
+      this.state = 'PLAYING';
+    });
+
+    const continueBtn = document.getElementById('continue-btn');
+    const saved = localStorage.getItem('vice_save');
+    if (saved) {
+      continueBtn.style.display = 'block';
+      continueBtn.addEventListener('click', () => {
+        this.loadGame();
+        document.getElementById('title-screen').style.display = 'none';
+        this.state = 'PLAYING';
+      });
+    }
   }
 
-  function endGame() {
-    screen = SCREEN_OVER;
-    overScreen.classList.remove('hidden');
-    document.getElementById('over-title').textContent = world.state.gameWon ? 'Mission Accomplished!' : 'Busted / Wasted';
-    document.getElementById('over-stats').textContent = `Final Cash: $${world.state.cash} | Completed Missions: ${world.state.completedMissions}`;
-    announce('Game over.');
+  setupStartScene() {
+    this.player.x = 0;
+    this.player.z = 0;
+    this.state = 'PLAYING';
   }
 
-  startBtn.addEventListener('click', () => startGame(false));
-  continueBtn.addEventListener('click', () => startGame(true));
-  restartBtn.addEventListener('click', () => startGame(false));
+  setupPlayScene() {
+    this.player.x = 20;
+    this.player.z = 20;
+    this.player.inCar = true;
+    this.wantedLevel = 1;
+    this.mission = { active: true, title: 'Getaway Drive', time: 45, desc: 'Evade police and reach dropzone.' };
+    this.state = 'PLAYING';
+  }
 
-  function step() {
-    if (screen === SCREEN_TITLE) {
-      world.step(STEP, { throttle: 0, steering: 0, brake: 0, forward: 0, turn: 0 }, 0, true);
+  setupEndScene() {
+    this.state = 'BUSTED';
+    document.getElementById('busted-screen').style.display = 'flex';
+    document.getElementById('final-cash').innerText = this.cash;
+  }
+
+  saveGame() {
+    const data = { cash: this.cash, wantedLevel: this.wantedLevel, x: this.player.x, z: this.player.z };
+    localStorage.setItem('vice_save', JSON.stringify(data));
+  }
+
+  loadGame() {
+    const data = JSON.parse(localStorage.getItem('vice_save'));
+    if (data) {
+      this.cash = data.cash;
+      this.wantedLevel = data.wantedLevel;
+      this.player.x = data.x;
+      this.player.z = data.z;
+    }
+  }
+
+  update(dt) {
+    if (this.state !== 'PLAYING') return;
+
+    if (this.input.wasPressed('KeyP')) {
+      this.state = 'PAUSED';
+      document.getElementById('pause-screen').style.display = 'flex';
       return;
     }
-    const controls = input.getControls();
-    const actions = input.takeActions();
-    const events = world.step(STEP, controls, actions, false);
 
-    // Update HUD
-    cashDisplay.textContent = `$${world.state.cash}`;
-    const stars = '★'.repeat(world.state.wanted) + '☆'.repeat(5 - world.state.wanted);
-    wantedDisplay.textContent = stars;
-    healthDisplay.textContent = `HEALTH ${Math.max(0, Math.round(world.state.health))}% | ARMOR ${world.state.armor}%`;
-
-    const m = MISSIONS[world.missionIndex] || MISSIONS[MISSIONS.length - 1];
-    missionTitle.textContent = m.title;
-    missionDesc.textContent = m.desc;
-    missionTimer.textContent = `Target Distance: ${Math.round(Math.hypot(world.state.player.x - m.targetX, world.state.player.z - m.targetZ))}m | Time: ${Math.max(0, Math.round(world.state.missionTimer))}s`;
-
-    if (events & EVENT_OVER || world.state.gameWon) endGame();
-  }
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, 0.25);
-    last = now;
-
-    if (screen === SCREEN_TITLE || screen === SCREEN_PLAY) {
-      while (accumulator >= STEP) {
-        step();
-        accumulator -= STEP;
-      }
+    // Player movement
+    if (this.input.isDown('KeyW') || this.input.isDown('ArrowUp')) {
+      this.player.speed = 5.0;
+      this.player.x += Math.sin(this.player.angle) * this.player.speed * dt;
+      this.player.z += Math.cos(this.player.angle) * this.player.speed * dt;
+    } else if (this.input.isDown('KeyS') || this.input.isDown('ArrowDown')) {
+      this.player.speed = -3.0;
+      this.player.x += Math.sin(this.player.angle) * this.player.speed * dt;
+      this.player.z += Math.cos(this.player.angle) * this.player.speed * dt;
+    } else {
+      this.player.speed = 0;
     }
 
-    renderer.draw(world.state, screen, 0);
+    if (this.input.isDown('KeyA') || this.input.isDown('ArrowLeft')) {
+      this.player.angle += 2.5 * dt;
+    }
+    if (this.input.isDown('KeyD') || this.input.isDown('ArrowRight')) {
+      this.player.angle -= 2.5 * dt;
+    }
+
+    // Camera follow
+    this.camera.cx = this.player.x;
+    this.camera.cy = this.player.y + 2;
+    this.camera.cz = this.player.z;
+    this.camera.x = this.player.x - Math.sin(this.player.angle) * 15;
+    this.camera.y = this.player.y + 8;
+    this.camera.z = this.player.z - Math.cos(this.player.angle) * 15;
+
+    // Update world
+    this.world.update(dt, this.player, this.wantedLevel);
+
+    // Update HUD
+    document.getElementById('cash-display').innerText = `$${this.cash}`;
+    document.getElementById('wanted-display').innerText = '★'.repeat(this.wantedLevel) || '☆';
+    document.getElementById('health-bar').style.width = `${this.health}%`;
+    document.getElementById('armour-bar').style.width = `${this.armour}%`;
   }
 
-  announce('Vice Metropolis. Press Start to play.');
-  requestAnimationFrame(frame);
+  render() {
+    this.renderer.render(this.world, this.player, this.camera);
+  }
+
+  loop(time) {
+    const dt = Math.min((time - this.lastTime) / 1000, 0.1);
+    this.lastTime = time;
+
+    this.update(dt);
+    this.render();
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
 }
+
+window.addEventListener('load', () => {
+  new Game();
+});

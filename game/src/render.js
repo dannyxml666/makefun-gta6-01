@@ -1,247 +1,288 @@
-import * as THREE from '../vendor/three.module.js';
-import { CAR, PALETTE, WORLD_SIZE } from './config.js';
-import { MISSIONS } from './world.js';
+// Vice Metropolis - Raw WebGL Renderer and Matrix Helpers
 
-export const SCREEN_TITLE = 0;
-export const SCREEN_PLAY = 1;
-export const SCREEN_PAUSED = 2;
-export const SCREEN_OVER = 3;
-
-export function createRenderer(canvas) {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(width, height);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(PALETTE.skyTop);
-  scene.fog = new THREE.FogExp2(PALETTE.skyTop, 0.0012);
-
-  const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 3000);
-
-  // Lighting
-  const ambient = new THREE.AmbientLight(0xffffff, 0.65);
-  scene.add(ambient);
-
-  const sun = new THREE.DirectionalLight(0xff4b82, 1.3);
-  sun.position.set(300, 500, 300);
-  scene.add(sun);
-
-  // Ground & Roads
-  const groundGeo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE);
-  const groundMat = new THREE.MeshStandardMaterial({ color: PALETTE.ground, roughness: 0.9 });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
-
-  // Buildings
-  const buildingGroup = new THREE.Group();
-  const bMat = new THREE.MeshStandardMaterial({ color: PALETTE.buildingBase, roughness: 0.7 });
-  for (let x = -WORLD_SIZE / 2 + 100; x < WORLD_SIZE / 2 - 100; x += 160) {
-    for (let z = -WORLD_SIZE / 2 + 100; z < WORLD_SIZE / 2 - 100; z += 160) {
-      const h = 70 + Math.abs(Math.sin(x * z)) * 160;
-      const geo = new THREE.BoxGeometry(110, h, 110);
-      const bMesh = new THREE.Mesh(geo, bMat);
-      bMesh.position.set(x, h / 2, z);
-      buildingGroup.add(bMesh);
-    }
+export class Matrix4 {
+  static perspective(fov, aspect, near, far) {
+    const f = 1.0 / Math.tan(fov / 2);
+    const rangeInv = 1 / (near - far);
+    return [
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (near + far) * rangeInv, -1,
+      0, 0, near * far * rangeInv * 2, 0
+    ];
   }
-  scene.add(buildingGroup);
 
-  // Player Meshes (Car & On Foot)
-  const carGeo = new THREE.BoxGeometry(CAR.width, CAR.height, CAR.length);
-  const carMat = new THREE.MeshStandardMaterial({ color: PALETTE.playerCar, metalness: 0.8, roughness: 0.2 });
-  const playerCarMesh = new THREE.Mesh(carGeo, carMat);
-  playerCarMesh.position.y = CAR.height / 2;
-  scene.add(playerCarMesh);
+  static lookAt(eye, center, up) {
+    const z0 = eye[0] - center[0], z1 = eye[1] - center[1], z2 = eye[2] - center[2];
+    let len = Math.hypot(z0, z1, z2);
+    const zx = z0 / len, zy = z1 / len, zz = z2 / len;
 
-  const footGeo = new THREE.CylinderGeometry(0.8, 0.8, 3, 8);
-  const footMat = new THREE.MeshStandardMaterial({ color: PALETTE.neonCyan });
-  const playerFootMesh = new THREE.Mesh(footGeo, footMat);
-  playerFootMesh.position.y = 1.5;
-  scene.add(playerFootMesh);
+    const x0 = up[1] * zz - up[2] * zy, x1 = up[2] * zx - up[0] * zz, x2 = up[0] * zy - up[1] * zx;
+    len = Math.hypot(x0, x1, x2);
+    const xx = x0 / len, xy = x1 / len, xz = x2 / len;
 
-  // Traffic Meshes
-  const trafficMat = new THREE.MeshStandardMaterial({ color: PALETTE.npcCar, metalness: 0.7, roughness: 0.3 });
-  const trafficMeshes = [];
+    const y0 = zy * xz - zz * xy, y1 = zz * xx - zx * xz, y2 = zx * xy - zy * xx;
 
-  // Police Meshes
-  const copMat = new THREE.MeshStandardMaterial({ color: PALETTE.policeCar, metalness: 0.8, roughness: 0.2 });
-  const policeMeshes = [];
+    return [
+      xx, y0, zx, 0,
+      xy, y1, zy, 0,
+      xz, y2, zz, 0,
+      -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
+      -(y0 * eye[0] + y1 * eye[1] + y2 * eye[2]),
+      -(zx * eye[0] + zy * eye[1] + zz * eye[2]),
+      1
+    ];
+  }
 
-  // Pedestrian Meshes
-  const pedMat = new THREE.MeshStandardMaterial({ color: PALETTE.pedestrian });
-  const pedestrianMeshes = [];
-
-  // Collectibles Meshes
-  const coinGeo = new THREE.CylinderGeometry(2, 2, 0.6, 16);
-  const coinMat = new THREE.MeshStandardMaterial({ color: PALETTE.neonYellow, emissive: PALETTE.neonYellow, emissiveIntensity: 0.5 });
-  const coinMeshes = [];
-
-  // Mission Marker Mesh
-  const markerGeo = new THREE.CylinderGeometry(8, 8, 40, 32);
-  const markerMat = new THREE.MeshBasicMaterial({ color: PALETTE.neonCyan, transparent: true, opacity: 0.5 });
-  const missionMarker = new THREE.Mesh(markerGeo, markerMat);
-  missionMarker.position.y = 20;
-  scene.add(missionMarker);
-
-  // Minimap canvas setup
-  const minimapCanvas = document.getElementById('minimap');
-  const miniCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
-
-  window.addEventListener('resize', () => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-  });
-
-  return {
-    draw(state, screen, best) {
-      const p = state.player;
-
-      // Visibility of player car vs foot
-      playerCarMesh.visible = p.inCar;
-      playerFootMesh.visible = !p.inCar;
-
-      if (p.inCar) {
-        playerCarMesh.position.set(p.x, CAR.height / 2, p.z);
-        playerCarMesh.rotation.y = p.rotation;
-
-        const camDist = 20;
-        const camHeight = 8;
-        camera.position.x = p.x - Math.sin(p.rotation) * camDist;
-        camera.position.z = p.z - Math.cos(p.rotation) * camDist;
-        camera.position.y = p.y + camHeight;
-        camera.lookAt(p.x, p.y + 2, p.z);
-      } else {
-        playerFootMesh.position.set(p.x, 1.5, p.z);
-        playerFootMesh.rotation.y = p.rotation;
-
-        const camDist = 12;
-        const camHeight = 5;
-        camera.position.x = p.x - Math.sin(p.rotation) * camDist;
-        camera.position.z = p.z - Math.cos(p.rotation) * camDist;
-        camera.position.y = p.y + camHeight;
-        camera.lookAt(p.x, p.y + 1.5, p.z);
-      }
-
-      // Mission target marker
-      const m = MISSIONS[state.missionIndex] || MISSIONS[0];
-      missionMarker.position.set(m.targetX, 20, m.targetZ);
-
-      // Traffic
-      while (trafficMeshes.length < state.traffic.length) {
-        const mesh = new THREE.Mesh(carGeo, trafficMat);
-        scene.add(mesh);
-        trafficMeshes.push(mesh);
-      }
-      for (let i = 0; i < state.traffic.length; i++) {
-        const cData = state.traffic[i];
-        const cMesh = trafficMeshes[i];
-        if (cMesh && cData) {
-          cMesh.position.set(cData.x, CAR.height / 2, cData.z);
-          cMesh.rotation.y = cData.rotation;
-          cMesh.visible = cData.x !== 9999;
-        }
-      }
-
-      // Police
-      while (policeMeshes.length < state.police.length) {
-        const mesh = new THREE.Mesh(carGeo, copMat);
-        scene.add(mesh);
-        policeMeshes.push(mesh);
-      }
-      for (let i = 0; i < state.police.length; i++) {
-        const cData = state.police[i];
-        const cMesh = policeMeshes[i];
-        if (cMesh && cData) {
-          cMesh.position.set(cData.x, CAR.height / 2, cData.z);
-          cMesh.rotation.y = cData.rotation;
-        }
-      }
-
-      // Pedestrians
-      while (pedestrianMeshes.length < state.pedestrians.length) {
-        const mesh = new THREE.Mesh(footGeo, pedMat);
-        scene.add(mesh);
-        pedestrianMeshes.push(mesh);
-      }
-      for (let i = 0; i < state.pedestrians.length; i++) {
-        const pData = state.pedestrians[i];
-        const pMesh = pedestrianMeshes[i];
-        if (pMesh && pData) {
-          pMesh.position.set(pData.x, 1.5, pData.z);
-          pMesh.rotation.z = pData.knocked ? Math.PI / 2 : 0;
-        }
-      }
-
-      // Collectibles
-      while (coinMeshes.length < state.collectibles.length) {
-        const coin = new THREE.Mesh(coinGeo, coinMat);
-        scene.add(coin);
-        coinMeshes.push(coin);
-      }
-      for (let i = 0; i < state.collectibles.length; i++) {
-        const c = state.collectibles[i];
-        const m = coinMeshes[i];
-        if (m && c) {
-          m.position.set(c.x, 1, c.z);
-          m.visible = !c.collected;
-          m.rotation.y += 0.03;
-        }
-      }
-
-      renderer.render(scene, camera);
-
-      // Render Minimap
-      if (miniCtx) {
-        miniCtx.fillStyle = '#100b2e';
-        miniCtx.fillRect(0, 0, 160, 160);
-
-        const scale = 160 / 1200;
-        const cx = 80;
-        const cy = 80;
-
-        // Draw mission target on minimap
-        miniCtx.fillStyle = '#00f0ff';
-        const mx = cx + (m.targetX - p.x) * scale;
-        const mz = cy + (m.targetZ - p.z) * scale;
-        miniCtx.beginPath();
-        miniCtx.arc(mx, mz, 5, 0, Math.PI * 2);
-        miniCtx.fill();
-
-        // Draw collectibles
-        miniCtx.fillStyle = '#ffe600';
-        for (const c of state.collectibles) {
-          if (!c.collected) {
-            const rx = cx + (c.x - p.x) * scale;
-            const rz = cy + (c.z - p.z) * scale;
-            if (rx >= 0 && rx <= 160 && rz >= 0 && rz <= 160) {
-              miniCtx.fillRect(rx - 2, rz - 2, 4, 4);
-            }
-          }
-        }
-
-        // Draw police on minimap
-        miniCtx.fillStyle = '#1e88e5';
-        for (const cop of state.police) {
-          const rx = cx + (cop.x - p.x) * scale;
-          const rz = cy + (cop.z - p.z) * scale;
-          if (rx >= 0 && rx <= 160 && rz >= 0 && rz <= 160) {
-            miniCtx.fillRect(rx - 3, rz - 3, 6, 6);
-          }
-        }
-
-        // Draw player on minimap
-        miniCtx.fillStyle = '#ff007f';
-        miniCtx.beginPath();
-        miniCtx.arc(cx, cy, 6, 0, Math.PI * 2);
-        miniCtx.fill();
+  static multiply(a, b) {
+    const out = new Array(16);
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        out[i * 4 + j] =
+          b[i * 4 + 0] * a[0 * 4 + j] +
+          b[i * 4 + 1] * a[1 * 4 + j] +
+          b[i * 4 + 2] * a[2 * 4 + j] +
+          b[i * 4 + 3] * a[3 * 4 + j];
       }
     }
-  };
+    return out;
+  }
+
+  static translation(x, y, z) {
+    return [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      x, y, z, 1
+    ];
+  }
+
+  static rotationY(angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return [
+      c, 0, -s, 0,
+      0, 1, 0, 0,
+      s, 0, c, 0,
+      0, 0, 0, 1
+    ];
+  }
+
+  static scaling(x, y, z) {
+    return [
+      x, 0, 0, 0,
+      0, y, 0, 0,
+      0, 0, z, 0,
+      0, 0, 0, 1
+    ];
+  }
+}
+
+export class Renderer {
+  constructor(canvas, minimapCanvas) {
+    this.canvas = canvas;
+    this.gl = canvas.getContext('webgl');
+    this.minimapCtx = minimapCanvas.getContext('2d');
+    
+    if (!this.gl) {
+      alert('WebGL not supported!');
+    }
+
+    this.initShaders();
+    this.initBuffers();
+  }
+
+  initShaders() {
+    const gl = this.gl;
+    const vsSource = `
+      attribute vec4 aPosition;
+      attribute vec3 aNormal;
+      attribute vec3 aColor;
+      uniform mat4 uProjectionMatrix;
+      uniform mat4 uModelViewMatrix;
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      void main() {
+        gl_Position = uProjectionMatrix * uModelViewMatrix * aPosition;
+        vColor = aColor;
+        vNormal = aNormal;
+      }
+    `;
+
+    const fsSource = `
+      precision mediump float;
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      void main() {
+        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.7));
+        float diff = max(dot(normalize(vNormal), lightDir), 0.3);
+        gl_FragColor = vec4(vColor * diff, 1.0);
+      }
+    `;
+
+    const createShader = (type, source) => {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      return shader;
+    };
+
+    const vs = createShader(gl.VERTEX_SHADER, vsSource);
+    const fs = createShader(gl.FRAGMENT_SHADER, fsSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+
+    this.program = program;
+    this.attribLocations = {
+      position: gl.getAttribLocation(program, 'aPosition'),
+      normal: gl.getAttribLocation(program, 'aNormal'),
+      color: gl.getAttribLocation(program, 'aColor'),
+    };
+    this.uniformLocations = {
+      projectionMatrix: gl.getUniformLocation(program, 'uProjectionMatrix'),
+      modelViewMatrix: gl.getUniformLocation(program, 'uModelViewMatrix'),
+    };
+  }
+
+  initBuffers() {
+    const gl = this.gl;
+    // Simple unit cube geometry (positions, normals, colors placeholder)
+    const positions = [
+      // Front
+      -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0.5,  0.5,  0.5, -0.5,  0.5,  0.5,
+      // Back
+      -0.5, -0.5, -0.5, -0.5,  0.5, -0.5,  0.5,  0.5, -0.5,  0.5, -0.5, -0.5,
+      // Top
+      -0.5,  0.5, -0.5, -0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5,  0.5, -0.5,
+      // Bottom
+      -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  0.5, -0.5,  0.5, -0.5, -0.5,  0.5,
+      // Right
+       0.5, -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0.5,  0.5,  0.5, -0.5,  0.5,
+      // Left
+      -0.5, -0.5, -0.5, -0.5, -0.5,  0.5, -0.5,  0.5,  0.5, -0.5,  0.5, -0.5,
+    ];
+
+    const normals = [
+       0,  0,  1,  0,  0,  1,  0,  0,  1,  0,  0,  1,
+       0,  0, -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,
+       0,  1,  0,  0,  1,  0,  0,  1,  0,  0,  1,  0,
+       0, -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,  0,
+       1,  0,  0,  1,  0,  0,  1,  0,  0,  1,  0,  0,
+      -1,  0,  0, -1,  0,  0, -1,  0,  0, -1,  0,  0,
+    ];
+
+    const indices = [
+       0,  1,  2,    0,  2,  3,
+       4,  5,  6,    4,  6,  7,
+       8,  9, 10,    8, 10, 11,
+      12, 13, 14,   12, 14, 15,
+      16, 17, 18,   16, 18, 19,
+      20, 21, 22,   20, 22, 23,
+    ];
+
+    this.cubeBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    this.normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+
+    this.indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+  }
+
+  render(world, player, camera) {
+    const gl = this.gl;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0.05, 0.05, 0.1, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.DEPTH_TEST);
+
+    gl.useProgram(this.program);
+
+    const aspect = this.canvas.width / this.canvas.height;
+    const projectionMatrix = Matrix4.perspective(Math.PI / 3, aspect, 0.1, 1000.0);
+    const viewMatrix = Matrix4.lookAt(
+      [camera.x, camera.y, camera.z],
+      [camera.cx, camera.cy, camera.cz],
+      [0, 1, 0]
+    );
+
+    gl.uniformMatrix4fv(this.uniformLocations.projectionMatrix, false, new Float32Array(projectionMatrix));
+
+    // Draw ground / streets
+    // Draw buildings
+    for (const b of world.buildings) {
+      const modelMatrix = Matrix4.multiply(
+        Matrix4.translation(b.x, b.height / 2, b.z),
+        Matrix4.scaling(b.width, b.height, b.depth)
+      );
+      const mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
+      gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+
+      // Bind attributes and draw cube
+      this.drawCube(b.color);
+    }
+
+    // Render minimap
+    this.renderMinimap(world, player);
+  }
+
+  drawCube(color) {
+    const gl = this.gl;
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.cubeBuffer);
+    gl.enableVertexAttribArray(this.attribLocations.position);
+    gl.vertexAttribPointer(this.attribLocations.position, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.normalBuffer);
+    gl.enableVertexAttribArray(this.attribLocations.normal);
+    gl.vertexAttribPointer(this.attribLocations.normal, 3, gl.FLOAT, false, 0, 0);
+
+    // Create solid color attribute buffer for cube
+    const colors = [];
+    for (let i = 0; i < 24; i++) colors.push(...color);
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(this.attribLocations.color);
+    gl.vertexAttribPointer(this.attribLocations.color, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+    gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+  }
+
+  renderMinimap(world, player) {
+    const ctx = this.minimapCtx;
+    const w = ctx.canvas.width;
+    const h = ctx.canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Background circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw buildings as grey blocks on minimap
+    ctx.fillStyle = '#444';
+    for (const b of world.buildings) {
+      const mx = w / 2 + (b.x - player.x) * 1.5;
+      const mz = h / 2 + (b.z - player.z) * 1.5;
+      ctx.fillRect(mx - 4, mz - 4, 8, 8);
+    }
+
+    // Draw player arrow in center
+    ctx.fillStyle = '#ff0';
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
 }
