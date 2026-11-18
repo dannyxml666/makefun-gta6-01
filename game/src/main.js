@@ -60,15 +60,18 @@ class Game {
   setupStartScene() {
     this.player.x = 0;
     this.player.z = 0;
+    this.player.inCar = false;
+    this.wantedLevel = 0;
+    this.mission = { active: true, title: 'Getaway Drive', time: 45, desc: 'Evade police and reach dropzone.' };
     this.state = 'PLAYING';
   }
 
   setupPlayScene() {
-    this.player.x = 20;
-    this.player.z = 20;
+    this.player.x = 25;
+    this.player.z = 25;
     this.player.inCar = true;
     this.wantedLevel = 1;
-    this.mission = { active: true, title: 'Getaway Drive', time: 45, desc: 'Evade police and reach dropzone.' };
+    this.mission = { active: true, title: 'Getaway Drive', time: 40, desc: 'Evade police and reach dropzone.' };
     this.state = 'PLAYING';
   }
 
@@ -138,6 +141,14 @@ class Game {
     document.getElementById('wanted-display').innerText = '★'.repeat(this.wantedLevel) || '☆';
     document.getElementById('health-bar').style.width = `${this.health}%`;
     document.getElementById('armour-bar').style.width = `${this.armour}%`;
+
+    if (this.mission.active) {
+      document.getElementById('mission-title').innerText = `MISSION: ${this.mission.title} (${Math.ceil(this.mission.time)}s)`;
+      document.getElementById('mission-desc').innerText = this.mission.desc;
+    } else {
+      document.getElementById('mission-title').innerText = 'MISSION: NONE';
+      document.getElementById('mission-desc').innerText = 'Explore Vice Metropolis or start missions.';
+    }
   }
 
   render() {

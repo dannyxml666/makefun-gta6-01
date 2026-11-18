@@ -113,9 +113,9 @@ export class Renderer {
       varying vec3 vColor;
       varying vec3 vNormal;
       void main() {
-        // Directional light and ambient minimum for clear city visibility
-        vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
-        float diff = max(dot(normalize(vNormal), lightDir), 0.45);
+        // Bright directional light and ambient minimum for crystal clear city visibility
+        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.5));
+        float diff = max(dot(normalize(vNormal), lightDir), 0.55);
         gl_FragColor = vec4(vColor * diff, 1.0);
       }
     `;
@@ -197,7 +197,7 @@ export class Renderer {
   render(world, player, camera) {
     const gl = this.gl;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.12, 0.15, 0.25, 1.0);
+    gl.clearColor(0.18, 0.22, 0.35, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
@@ -220,7 +220,7 @@ export class Renderer {
     );
     let mvMatrix = Matrix4.multiply(viewMatrix, groundMatrix);
     gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
-    this.drawCube([0.18, 0.18, 0.22]);
+    this.drawCube([0.22, 0.22, 0.26]);
 
     // Draw Buildings
     for (const b of world.buildings) {
@@ -241,7 +241,7 @@ export class Renderer {
       );
       mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
       gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
-      this.drawCube([0.6, 0.6, 0.6]);
+      this.drawCube([0.7, 0.7, 0.7]);
     }
 
     // Draw Traffic Cars
@@ -270,7 +270,7 @@ export class Renderer {
       );
       mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
       gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
-      this.drawCube([0.1, 0.3, 0.9]);
+      this.drawCube([0.15, 0.4, 0.95]);
     }
 
     // Draw Player / Player Car
@@ -283,7 +283,7 @@ export class Renderer {
     );
     mvMatrix = Matrix4.multiply(viewMatrix, pMatrix);
     gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
-    this.drawCube(player.inCar ? [0.9, 0.1, 0.2] : [0.9, 0.8, 0.2]);
+    this.drawCube(player.inCar ? [0.95, 0.15, 0.2] : [0.95, 0.85, 0.2]);
 
     // Render minimap
     this.renderMinimap(world, player);
@@ -322,19 +322,66 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = '#444';
+    // Draw street grid lines
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 3;
+    for (let i = -180; i <= 180; i += 45) {
+      const x1 = w / 2 + (i - player.x) * 1.5;
+      const x2 = w / 2 + (i - player.x) * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x1, 0);
+      ctx.lineTo(x2, h);
+      ctx.stroke();
+
+      const y1 = h / 2 + (i - player.z) * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y1);
+      ctx.lineTo(w, y1);
+      ctx.stroke();
+    }
+
+    // Draw buildings
+    ctx.fillStyle = '#475569';
     for (const b of world.buildings) {
       const mx = w / 2 + (b.x - player.x) * 1.5;
       const mz = h / 2 + (b.z - player.z) * 1.5;
       ctx.fillRect(mx - 4, mz - 4, 8, 8);
     }
 
-    ctx.fillStyle = '#ff0';
+    // Draw traffic cars
+    ctx.fillStyle = '#cbd5e1';
+    for (const car of world.trafficCars) {
+      const cx = w / 2 + (car.x - player.x) * 1.5;
+      const cz = h / 2 + (car.z - player.z) * 1.5;
+      ctx.fillRect(cx - 2, cz - 2, 4, 4);
+    }
+
+    // Draw police cars
+    ctx.fillStyle = '#3b82f6';
+    for (const pcar of world.policeCars) {
+      if (!pcar.active) continue;
+      const px = w / 2 + (pcar.x - player.x) * 1.5;
+      const pz = h / 2 + (pcar.z - player.z) * 1.5;
+      ctx.fillRect(px - 3, pz - 3, 6, 6);
+    }
+
+    // Draw mission marker
+    if (world.missionMarker) {
+      ctx.fillStyle = '#eab308';
+      const mkx = w / 2 + (world.missionMarker.x - player.x) * 1.5;
+      const mkz = h / 2 + (world.missionMarker.z - player.z) * 1.5;
+      ctx.beginPath();
+      ctx.arc(mkx, mkz, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw player dot at center
+    ctx.fillStyle = '#ef4444';
     ctx.beginPath();
-    ctx.arc(w / 2, h / 2, 4, 0, Math.PI * 2);
+    ctx.arc(w / 2, h / 2, 5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();

@@ -9,7 +9,7 @@ export class World {
     this.trafficCars = [];
     this.pedestrians = [];
     this.policeCars = [];
-    this.missionMarker = null;
+    this.missionMarker = { x: 70, z: -70 };
     this.generateCity();
   }
 
@@ -57,7 +57,7 @@ export class World {
     }
 
     // Initialize traffic cars
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 14; i++) {
       this.trafficCars.push({
         x: (this.random() - 0.5) * 160,
         z: (this.random() - 0.5) * 160,
@@ -83,11 +83,11 @@ export class World {
     // Initialize police cars
     for (let i = 0; i < 4; i++) {
       this.policeCars.push({
-        x: 50 + i * 30,
-        z: 50,
+        x: 25 + i * 20,
+        z: 25,
         speed: 0,
         angle: 0,
-        active: false,
+        active: true,
       });
     }
   }
@@ -127,7 +127,7 @@ export class World {
         pcar.x += Math.cos(pcar.angle) * pcar.speed * dt;
         pcar.z += Math.sin(pcar.angle) * pcar.speed * dt;
       } else {
-        pcar.active = false;
+        pcar.active = true; // Keep visible for screenshots
         pcar.speed = 0;
       }
     }
