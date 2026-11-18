@@ -1,5 +1,6 @@
 export const WORLD_SIZE = 1600;
 export const BLOCK_SIZE = 120;
+export const STEP = 1 / 60;
 
 export const CAR = {
   width: 3.2,
