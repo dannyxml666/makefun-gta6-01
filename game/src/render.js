@@ -113,8 +113,9 @@ export class Renderer {
       varying vec3 vColor;
       varying vec3 vNormal;
       void main() {
-        vec3 lightDir = normalize(vec3(0.5, 1.0, 0.7));
-        float diff = max(dot(normalize(vNormal), lightDir), 0.3);
+        // Directional light and ambient minimum for clear city visibility
+        vec3 lightDir = normalize(vec3(0.6, 1.0, 0.5));
+        float diff = max(dot(normalize(vNormal), lightDir), 0.45);
         gl_FragColor = vec4(vColor * diff, 1.0);
       }
     `;
@@ -147,7 +148,6 @@ export class Renderer {
 
   initBuffers() {
     const gl = this.gl;
-    // Simple unit cube geometry (positions, normals, colors placeholder)
     const positions = [
       // Front
       -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0.5,  0.5,  0.5, -0.5,  0.5,  0.5,
@@ -197,7 +197,7 @@ export class Renderer {
   render(world, player, camera) {
     const gl = this.gl;
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.05, 0.05, 0.1, 1.0);
+    gl.clearColor(0.12, 0.15, 0.25, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
@@ -213,19 +213,77 @@ export class Renderer {
 
     gl.uniformMatrix4fv(this.uniformLocations.projectionMatrix, false, new Float32Array(projectionMatrix));
 
-    // Draw ground / streets
-    // Draw buildings
+    // Draw Ground
+    const groundMatrix = Matrix4.multiply(
+      Matrix4.translation(0, -0.1, 0),
+      Matrix4.scaling(400, 0.2, 400)
+    );
+    let mvMatrix = Matrix4.multiply(viewMatrix, groundMatrix);
+    gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+    this.drawCube([0.18, 0.18, 0.22]);
+
+    // Draw Buildings
     for (const b of world.buildings) {
       const modelMatrix = Matrix4.multiply(
         Matrix4.translation(b.x, b.height / 2, b.z),
         Matrix4.scaling(b.width, b.height, b.depth)
       );
-      const mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
+      mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
       gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
-
-      // Bind attributes and draw cube
       this.drawCube(b.color);
     }
+
+    // Draw Streetlights
+    for (const sl of world.streetlights) {
+      const modelMatrix = Matrix4.multiply(
+        Matrix4.translation(sl.x, 3.0, sl.z),
+        Matrix4.scaling(0.4, 6.0, 0.4)
+      );
+      mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
+      gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+      this.drawCube([0.6, 0.6, 0.6]);
+    }
+
+    // Draw Traffic Cars
+    for (const car of world.trafficCars) {
+      const modelMatrix = Matrix4.multiply(
+        Matrix4.multiply(
+          Matrix4.translation(car.x, 0.75, car.z),
+          Matrix4.rotationY(car.angle)
+        ),
+        Matrix4.scaling(2.2, 1.4, 4.0)
+      );
+      mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
+      gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+      this.drawCube(car.color);
+    }
+
+    // Draw Police Cars
+    for (const pcar of world.policeCars) {
+      if (!pcar.active) continue;
+      const modelMatrix = Matrix4.multiply(
+        Matrix4.multiply(
+          Matrix4.translation(pcar.x, 0.75, pcar.z),
+          Matrix4.rotationY(pcar.angle)
+        ),
+        Matrix4.scaling(2.4, 1.4, 4.2)
+      );
+      mvMatrix = Matrix4.multiply(viewMatrix, modelMatrix);
+      gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+      this.drawCube([0.1, 0.3, 0.9]);
+    }
+
+    // Draw Player / Player Car
+    const pMatrix = Matrix4.multiply(
+      Matrix4.multiply(
+        Matrix4.translation(player.x, player.inCar ? 0.75 : 1.0, player.z),
+        Matrix4.rotationY(player.angle)
+      ),
+      player.inCar ? Matrix4.scaling(2.2, 1.4, 4.0) : Matrix4.scaling(0.8, 1.8, 0.8)
+    );
+    mvMatrix = Matrix4.multiply(viewMatrix, pMatrix);
+    gl.uniformMatrix4fv(this.uniformLocations.modelViewMatrix, false, new Float32Array(mvMatrix));
+    this.drawCube(player.inCar ? [0.9, 0.1, 0.2] : [0.9, 0.8, 0.2]);
 
     // Render minimap
     this.renderMinimap(world, player);
@@ -242,7 +300,6 @@ export class Renderer {
     gl.enableVertexAttribArray(this.attribLocations.normal);
     gl.vertexAttribPointer(this.attribLocations.normal, 3, gl.FLOAT, false, 0, 0);
 
-    // Create solid color attribute buffer for cube
     const colors = [];
     for (let i = 0; i < 24; i++) colors.push(...color);
     const colorBuffer = gl.createBuffer();
@@ -261,7 +318,6 @@ export class Renderer {
     const h = ctx.canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Background circle
     ctx.save();
     ctx.beginPath();
     ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
@@ -269,7 +325,6 @@ export class Renderer {
     ctx.fillStyle = '#111';
     ctx.fillRect(0, 0, w, h);
 
-    // Draw buildings as grey blocks on minimap
     ctx.fillStyle = '#444';
     for (const b of world.buildings) {
       const mx = w / 2 + (b.x - player.x) * 1.5;
@@ -277,7 +332,6 @@ export class Renderer {
       ctx.fillRect(mx - 4, mz - 4, 8, 8);
     }
 
-    // Draw player arrow in center
     ctx.fillStyle = '#ff0';
     ctx.beginPath();
     ctx.arc(w / 2, h / 2, 4, 0, Math.PI * 2);

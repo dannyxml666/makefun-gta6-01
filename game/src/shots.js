@@ -6,12 +6,10 @@ export function initShshots(gameInstance) {
   const seed = params.get('seed');
 
   if (seed) {
-    // Set seed if provided
     gameInstance.seed = Number(seed);
   }
 
   if (shot) {
-    // Hide title screen immediately
     const titleScreen = document.getElementById('title-screen');
     if (titleScreen) {
       titleScreen.style.display = 'none';
@@ -25,6 +23,7 @@ export function initShshots(gameInstance) {
       gameInstance.setupEndScene();
     }
 
+    window.__shotReady = true;
     window.__SCREENSHOT_READY__ = true;
   }
 }
