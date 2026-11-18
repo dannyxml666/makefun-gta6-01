@@ -1,19 +1,19 @@
-# Vice Metropolis
+# makefun-gta6-01
 
-Vice Metropolis is an open-world 3D crime simulation game built with vanilla JavaScript and raw WebGL. Explore the city on foot or in vehicles, complete missions from fixers, evade police chases, and manage your wanted level.
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/dannyxml666/makefun-gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/dannyxml666/makefun-gta6-01/reward.svg)](https://make.fun/bounty/gta6-01/reward?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-## How to Play
+Vice Metropolis is an open-world 3D crime simulation game built with vanilla JavaScript and raw WebGL: drive and steal cars, evade police, and complete missions across a living city.
 
-1. Start the local development server:
-   ```bash
-   node serve.ts
-   ```
-2. Open your browser at `http://localhost:8080`.
-3. Click **NEW GAME** to start playing.
+## Run it
 
-## Controls
+```sh
+node serve.ts
+```
 
-- **Movement:** WASD / Arrow Keys
-- **Enter/Exit Car / Steal:** E
-- **Punch:** F
-- **Pause:** P
+Then open your browser at `http://localhost:8080`.
+
+---
+
+<sub>Entered on [make.fun](https://make.fun/?ref=g5epfacb&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards</sub>
