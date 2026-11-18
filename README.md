@@ -6,6 +6,16 @@
 
 Vice Metropolis is an open-world 3D crime simulation game built with vanilla JavaScript and raw WebGL: drive and steal cars, evade police, and complete missions across a living city.
 
+## Features
+
+- Drive and steal cars across the open city
+- Experience police chases complete with a dynamic wanted level
+- Complete three story missions assigned by Fixer Marcus
+- Enjoy on-foot movement and dynamic punch combat
+- Interact with a living world featuring pedestrians and traffic
+- Track your position with a HUD and circular minimap
+- Save your progress and continue your game at any time
+
 ## Run it
 
 ```sh
